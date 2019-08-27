@@ -1,8 +1,9 @@
 // VL53L0X control
+// Copyright © 2019 Adrian Kennard, Andrews & Arnold Ltd. See LICENCE file for details. GPL 3.0
 // Based on https://github.com/pololu/vl53l0x-arduino
 
-#include "revk.h"
 #include "vl53l0x.h"
+#include "esp_log.h"
 #include <driver/i2c.h>
 
 enum

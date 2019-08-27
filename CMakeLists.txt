@@ -1,4 +1,4 @@
 idf_component_register(
-			SRCS "pn532.c"
+			SRCS "vl53l0x.c"
 			INCLUDE_DIRS "include"
 )
