@@ -16,9 +16,12 @@ typedef struct vl53l0x_s vl53l0x_t;
 typedef enum
 { VcselPeriodPreRange, VcselPeriodFinalRange } vl53l0x_vcselPeriodType;
 
-
-vl53l0x_t *vl53l0x_init (uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t io_2v8);
-void vl532l0x_end (vl53l0x_t *);
+// Set up I2C and create the vl53l0x structure, NULL means could not see device on I2C
+vl53l0x_t *vl53l0x_config(uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t io_2v8);
+// Initialise the VL53L0X
+int vl53l0x_init (vl53l0x_t*);
+// End I2C and free the structure
+void vl53l0x_end (vl53l0x_t *);
 
 void vl53l0x_setAddress (vl53l0x_t *, uint8_t new_addr);
 uint8_t vl53l0x_getAddress (vl53l0x_t * v);
@@ -50,6 +53,7 @@ uint16_t vl53l0x_readRangeSingleMillimeters (vl53l0x_t *);
 void vl53l0x_setTimeout (vl53l0x_t *, uint16_t timeout);
 uint16_t vl53l0x_getTimeout (vl53l0x_t *);
 int vl53l0x_timeoutOccurred (vl53l0x_t *);
+int vl53l0x_i2cFail (vl53l0x_t *);
 
 
 #endif
