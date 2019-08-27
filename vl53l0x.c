@@ -154,6 +154,7 @@ Done (vl53l0x_t *v,i2c_cmd_handle_t i)
 static i2c_cmd_handle_t
 Read (vl53l0x_t * v, uint8_t reg)
 {                               // Set up for read
+   usleep(1300);	// tBUF from data sheet (WTF)
    i2c_cmd_handle_t i = i2c_cmd_link_create ();
    i2c_master_start (i);
    i2c_master_write_byte (i, (v->address << 1), 1);
@@ -168,6 +169,7 @@ Read (vl53l0x_t * v, uint8_t reg)
 static i2c_cmd_handle_t
 Write (vl53l0x_t * v, uint8_t reg)
 {                               // Set up for write
+   usleep(1300);	// tBUF from data sheet (WTF)
    i2c_cmd_handle_t i = i2c_cmd_link_create ();
    i2c_master_start (i);
    i2c_master_write_byte (i, (v->address << 1), 1);
@@ -668,6 +670,7 @@ int
 vl53l0x_init (vl53l0x_t * v)
 {
    // Set up the VL53L0X
+   if(vl53l0x_readReg8Bit(v,0xC0)!=0xEE)return 0; // Reference register failed
    // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
    if (v->io_2v8)
       vl53l0x_writeReg8Bit (v, VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV, vl53l0x_readReg8Bit (v, VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01);   // set bit 0
