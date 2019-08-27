@@ -5,6 +5,11 @@
 #include "vl53l0x.h"
 #include "esp_log.h"
 #include <driver/i2c.h>
+#define ACK_CHECK_EN 0x1        /*!< I2C master will check ack from slave */
+#define ACK_CHECK_DIS 0x0       /*!< I2C master will not check ack from slave */
+#define ACK_VAL 0x0             /*!< I2C ack value */
+#define NACK_VAL 0x1            /*!< I2C nack value */
+
 
 enum
 {
@@ -137,42 +142,95 @@ static uint32_t measurement_timing_budget_us;
 #define encodeVcselPeriod(period_pclks) (((period_pclks) >> 1) - 1)
 
 void
-vl532l0x_writeReg8Bit (vl53l0x_t * v, uint8_t reg, uint8_t val)
+vl53l0x_writeReg8Bit (vl53l0x_t * v, uint8_t reg, uint8_t val)
 {
-   // TODO
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val, ACK_CHECK_EN);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
 }
 
 void
 vl53l0x_writeReg16Bit (vl53l0x_t * v, uint8_t reg, uint16_t val)
 {
-   // TODO
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val >> 8, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val, ACK_CHECK_EN);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
 }
 
 void
-vl53l0x_writeReg32Bit (vl53l0x_t * v, uint8_t reg, uint32_t value)
+vl53l0x_writeReg32Bit (vl53l0x_t * v, uint8_t reg, uint32_t val)
 {
-   // TODO
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val >> 24, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val >> 16, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val >> 8, ACK_CHECK_EN);
+   i2c_master_write_byte (i, val, ACK_CHECK_EN);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
 }
 
 uint8_t
 vl53l0x_readReg8Bit (vl53l0x_t * v, uint8_t reg)
 {
-   // TODO
-   return -1;
+   uint8_t buf[1] = { };
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_read_byte (i, buf + 0, NACK_VAL);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
+   return buf[0];
 }
 
 uint16_t
 vl53l0x_readReg16Bit (vl53l0x_t * v, uint8_t reg)
 {
-   // TODO
-   return -1;
+   uint8_t buf[2] = { };
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_read_byte (i, buf + 0, ACK_VAL);
+   i2c_master_read_byte (i, buf + 1, NACK_VAL);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
+   return (buf[0] << 8) + buf[1];
 }
 
 uint32_t
 vl53l0x_readReg32Bit (vl53l0x_t * v, uint8_t reg)
 {
-   // TODO
-   return -1;
+   uint8_t buf[3] = { };
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_read_byte (i, buf + 0, ACK_VAL);
+   i2c_master_read_byte (i, buf + 1, ACK_VAL);
+   i2c_master_read_byte (i, buf + 2, ACK_VAL);
+   i2c_master_read_byte (i, buf + 3, NACK_VAL);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
+   return (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
 }
 
 // Get the return signal rate limit check value in MCPS
@@ -182,7 +240,16 @@ vl53l0x_readReg32Bit (vl53l0x_t * v, uint8_t reg)
 void
 vl53l0x_readMulti (vl53l0x_t * v, uint8_t reg, uint8_t * dst, uint8_t count)
 {
-   // TODO
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   if (count > 1)
+      i2c_master_read (i, dst + 0, count - 1, ACK_VAL);
+   i2c_master_read_byte (i, dst + count - 1, NACK_VAL);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
 }
 
 // Write an arbitrary number of bytes from the given array to the sensor,
@@ -190,7 +257,14 @@ vl53l0x_readMulti (vl53l0x_t * v, uint8_t reg, uint8_t * dst, uint8_t count)
 void
 vl53l0x_writeMulti (vl53l0x_t * v, uint8_t reg, uint8_t const *src, uint8_t count)
 {
-   // TODO
+   i2c_cmd_handle_t i = i2c_cmd_link_create ();
+   i2c_master_start (i);
+   i2c_master_write_byte (i, v->address, ACK_CHECK_EN);
+   i2c_master_write_byte (i, reg, ACK_CHECK_EN);
+   i2c_master_write (i, (uint8_t *) src, count, ACK_CHECK_EN);
+   i2c_master_stop (i);
+   i2c_master_cmd_begin (v->port, i, 100);
+   i2c_cmd_link_delete (i);
 }
 
 // Decode VCSEL (vertical cavity surface emitting laser) pulse period in PCLKs
@@ -579,7 +653,7 @@ vl53l0x_init (uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t i
    memset (v, 0, sizeof (*v));
    v->port = port;
    v->address = (address ? : I2C_SLAVE_DEVICE_ADDRESS);
-
+   i2c_set_timeout (port, 80000);       // 1ms?
    // Set up the VL53L0X
    // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
    if (io_2v8)
