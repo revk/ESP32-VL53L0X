@@ -7,7 +7,8 @@ static const char TAG[] = "ranger";
 #include "esp_log.h"
 #include <driver/i2c.h>
 #define TIMEOUT	(10/portTICK_PERIOD_MS) // I2C command timeout
-#define tBUF	1300            // tBUF=1.3ms from data sheet
+//#define tBUF	1300            // tBUF=1.3ms from data sheet
+#define DEBUG
 
 enum
 {
@@ -150,7 +151,9 @@ Done (vl53l0x_t * v, i2c_cmd_handle_t i)
    if (err)
       v->i2c_fail = 1;
    i2c_cmd_link_delete (i);
+#ifdef tBUF
    usleep (tBUF);
+#endif
    return err;
 }
 
@@ -184,7 +187,9 @@ vl53l0x_writeReg8Bit (vl53l0x_t * v, uint8_t reg, uint8_t val)
    i2c_cmd_handle_t i = Write (v, reg);
    i2c_master_write_byte (i, val, 1);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "W %02X=%02X %s", reg, val, esp_err_to_name (err));
+#endif
 }
 
 void
@@ -194,7 +199,9 @@ vl53l0x_writeReg16Bit (vl53l0x_t * v, uint8_t reg, uint16_t val)
    i2c_master_write_byte (i, val >> 8, 1);
    i2c_master_write_byte (i, val, 1);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "W %02X=%04X %s", reg, val, esp_err_to_name (err));
+#endif
 }
 
 void
@@ -206,7 +213,9 @@ vl53l0x_writeReg32Bit (vl53l0x_t * v, uint8_t reg, uint32_t val)
    i2c_master_write_byte (i, val >> 8, 1);
    i2c_master_write_byte (i, val, 1);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "W %02X=%08X %s", reg, val, esp_err_to_name (err));
+#endif
 }
 
 uint8_t
@@ -216,7 +225,9 @@ vl53l0x_readReg8Bit (vl53l0x_t * v, uint8_t reg)
    i2c_cmd_handle_t i = Read (v, reg);
    i2c_master_read_byte (i, buf + 0, I2C_MASTER_LAST_NACK);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "R %02X=%02X %s", reg, buf[0], esp_err_to_name (err));
+#endif
    return buf[0];
 }
 
@@ -228,7 +239,9 @@ vl53l0x_readReg16Bit (vl53l0x_t * v, uint8_t reg)
    i2c_master_read_byte (i, buf + 0, I2C_MASTER_ACK);
    i2c_master_read_byte (i, buf + 1, I2C_MASTER_LAST_NACK);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "R %02X=%02X%02X %s", reg, buf[0], buf[1], esp_err_to_name (err));
+#endif
    return (buf[0] << 8) + buf[1];
 }
 
@@ -242,7 +255,9 @@ vl53l0x_readReg32Bit (vl53l0x_t * v, uint8_t reg)
    i2c_master_read_byte (i, buf + 2, I2C_MASTER_ACK);
    i2c_master_read_byte (i, buf + 3, I2C_MASTER_LAST_NACK);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "R %02X=%02X%02X%02X%02X %s", reg, buf[0], buf[1], buf[2], buf[3], esp_err_to_name (err));
+#endif
    return (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
 }
 
@@ -258,7 +273,9 @@ vl53l0x_readMulti (vl53l0x_t * v, uint8_t reg, uint8_t * dst, uint8_t count)
       i2c_master_read (i, dst + 0, count - 1, I2C_MASTER_ACK);
    i2c_master_read_byte (i, dst + count - 1, I2C_MASTER_LAST_NACK);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "R %02X (%d) %s", reg, count, esp_err_to_name (err));
+#endif
 }
 
 // Write an arbitrary number of bytes from the given array to the sensor,
@@ -269,7 +286,9 @@ vl53l0x_writeMulti (vl53l0x_t * v, uint8_t reg, uint8_t const *src, uint8_t coun
    i2c_cmd_handle_t i = Write (v, reg);
    i2c_master_write (i, (uint8_t *) src, count, 1);
    esp_err_t err = Done (v, i);
+#ifdef DEBUG
    ESP_LOGI (TAG, "W %02X (%d) %s", reg, count, esp_err_to_name (err));
+#endif
 }
 
 // Decode VCSEL (vertical cavity surface emitting laser) pulse period in PCLKs
@@ -613,6 +632,7 @@ vl53l0x_config (int8_t port, int8_t scl, int8_t sda, int8_t xshut, uint8_t addre
 {
    if (port < 0 || scl < 0 || sda < 0 || scl == sda)
       return NULL;
+   if(!GPIO_IS_VALID_OUTPUT_GPIO(scl)||!GPIO_IS_VALID_OUTPUT_GPIO(sda)||(xshut>=0&&!GPIO_IS_VALID_OUTPUT_GPIO(xshut)))return 0;
    if (i2c_driver_install (port, I2C_MODE_MASTER, 0, 0, 0))
       return NULL;              // Uh?
    i2c_config_t config = {
@@ -630,22 +650,13 @@ vl53l0x_config (int8_t port, int8_t scl, int8_t sda, int8_t xshut, uint8_t addre
    }
    i2c_set_timeout (port, 80000);       // Clock stretching
    i2c_filter_enable (port, 5);
-   // Can we see it
-   i2c_cmd_handle_t i = i2c_cmd_link_create ();
-   i2c_master_start (i);
-   i2c_master_write_byte (i, (address << 1), 1);
-   i2c_master_stop (i);
-   esp_err_t err = i2c_master_cmd_begin (port, i, TIMEOUT);
-   if (err)
-      err = i2c_master_cmd_begin (port, i, TIMEOUT);
-   if (err)
-   {                            // Cannot see device
-      ESP_LOGI (TAG, "Ranger: %s", esp_err_to_name (err));
-      i2c_cmd_link_delete (i);
-      i2c_driver_delete (port);
-      return NULL;
+   if (xshut >= 0)
+   {
+      gpio_reset_pin (xshut);
+      gpio_set_level (xshut, 0);       // Off
+      gpio_set_drive_capability (xshut, GPIO_DRIVE_CAP_3);
+      gpio_set_direction (xshut, GPIO_MODE_OUTPUT);
    }
-   i2c_cmd_link_delete (i);
    vl53l0x_t *v = malloc (sizeof (*v));
    if (!v)
    {                            // Uh?
@@ -674,6 +685,13 @@ vl53l0x_init (vl53l0x_t * v)
 {
    const char *err;
    // Set up the VL53L0X
+   if (v->xshut >= 0)
+   {                            // XSHUT or power control
+      gpio_set_level (v->xshut, 0);       // Off
+      usleep (100000);
+      gpio_set_level (v->xshut, 0);       // On
+      usleep (10000);           // Plenty of time to boot (data sheet says 1.2ms)
+   }
    // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
    if (v->io_2v8)
       vl53l0x_writeReg8Bit (v, VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV, vl53l0x_readReg8Bit (v, VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01);   // set bit 0
