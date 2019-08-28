@@ -7,6 +7,7 @@ static const char TAG[] = "ranger";
 #include "esp_log.h"
 #include <driver/i2c.h>
 #define TIMEOUT	(10/portTICK_PERIOD_MS) // I2C command timeout
+#define tBUF	1300            // tBUF=1.3ms from data sheet
 
 enum
 {
@@ -97,6 +98,7 @@ struct vl53l0x_s
 {
    uint8_t port;
    uint8_t address;
+   int8_t xshut;
    uint16_t io_timeout;
    uint8_t io_2v8:1;
    uint8_t did_timeout:1;
@@ -141,25 +143,25 @@ static uint32_t measurement_timing_budget_us;
 #define encodeVcselPeriod(period_pclks) (((period_pclks) >> 1) - 1)
 
 static esp_err_t
-Done (vl53l0x_t *v,i2c_cmd_handle_t i)
+Done (vl53l0x_t * v, i2c_cmd_handle_t i)
 {
    i2c_master_stop (i);
    esp_err_t err = i2c_master_cmd_begin (v->port, i, TIMEOUT);
    if (err)
       v->i2c_fail = 1;
    i2c_cmd_link_delete (i);
+   usleep (tBUF);
    return err;
 }
 
 static i2c_cmd_handle_t
 Read (vl53l0x_t * v, uint8_t reg)
 {                               // Set up for read
-   usleep(1300);	// tBUF from data sheet (WTF)
    i2c_cmd_handle_t i = i2c_cmd_link_create ();
    i2c_master_start (i);
    i2c_master_write_byte (i, (v->address << 1), 1);
    i2c_master_write_byte (i, reg, 1);
-   Done(v,i);
+   Done (v, i);
    i = i2c_cmd_link_create ();
    i2c_master_start (i);
    i2c_master_write_byte (i, (v->address << 1) + 1, 1);
@@ -169,7 +171,6 @@ Read (vl53l0x_t * v, uint8_t reg)
 static i2c_cmd_handle_t
 Write (vl53l0x_t * v, uint8_t reg)
 {                               // Set up for write
-   usleep(1300);	// tBUF from data sheet (WTF)
    i2c_cmd_handle_t i = i2c_cmd_link_create ();
    i2c_master_start (i);
    i2c_master_write_byte (i, (v->address << 1), 1);
@@ -182,7 +183,7 @@ vl53l0x_writeReg8Bit (vl53l0x_t * v, uint8_t reg, uint8_t val)
 {
    i2c_cmd_handle_t i = Write (v, reg);
    i2c_master_write_byte (i, val, 1);
-   esp_err_t err = Done(v,i);
+   esp_err_t err = Done (v, i);
    ESP_LOGI (TAG, "W %02X=%02X %s", reg, val, esp_err_to_name (err));
 }
 
@@ -192,7 +193,7 @@ vl53l0x_writeReg16Bit (vl53l0x_t * v, uint8_t reg, uint16_t val)
    i2c_cmd_handle_t i = Write (v, reg);
    i2c_master_write_byte (i, val >> 8, 1);
    i2c_master_write_byte (i, val, 1);
-   esp_err_t err = Done(v,i);
+   esp_err_t err = Done (v, i);
    ESP_LOGI (TAG, "W %02X=%04X %s", reg, val, esp_err_to_name (err));
 }
 
@@ -204,7 +205,7 @@ vl53l0x_writeReg32Bit (vl53l0x_t * v, uint8_t reg, uint32_t val)
    i2c_master_write_byte (i, val >> 16, 1);
    i2c_master_write_byte (i, val >> 8, 1);
    i2c_master_write_byte (i, val, 1);
-   esp_err_t err = Done(v,i);
+   esp_err_t err = Done (v, i);
    ESP_LOGI (TAG, "W %02X=%08X %s", reg, val, esp_err_to_name (err));
 }
 
@@ -214,7 +215,7 @@ vl53l0x_readReg8Bit (vl53l0x_t * v, uint8_t reg)
    uint8_t buf[1] = { };
    i2c_cmd_handle_t i = Read (v, reg);
    i2c_master_read_byte (i, buf + 0, I2C_MASTER_LAST_NACK);
-   esp_err_t err = Done(v,i);
+   esp_err_t err = Done (v, i);
    ESP_LOGI (TAG, "R %02X=%02X %s", reg, buf[0], esp_err_to_name (err));
    return buf[0];
 }
@@ -226,7 +227,7 @@ vl53l0x_readReg16Bit (vl53l0x_t * v, uint8_t reg)
    i2c_cmd_handle_t i = Read (v, reg);
    i2c_master_read_byte (i, buf + 0, I2C_MASTER_ACK);
    i2c_master_read_byte (i, buf + 1, I2C_MASTER_LAST_NACK);
-   esp_err_t err = Done(v,i);
+   esp_err_t err = Done (v, i);
    ESP_LOGI (TAG, "R %02X=%02X%02X %s", reg, buf[0], buf[1], esp_err_to_name (err));
    return (buf[0] << 8) + buf[1];
 }
@@ -240,7 +241,7 @@ vl53l0x_readReg32Bit (vl53l0x_t * v, uint8_t reg)
    i2c_master_read_byte (i, buf + 1, I2C_MASTER_ACK);
    i2c_master_read_byte (i, buf + 2, I2C_MASTER_ACK);
    i2c_master_read_byte (i, buf + 3, I2C_MASTER_LAST_NACK);
-   esp_err_t err = Done(v,i);
+   esp_err_t err = Done (v, i);
    ESP_LOGI (TAG, "R %02X=%02X%02X%02X%02X %s", reg, buf[0], buf[1], buf[2], buf[3], esp_err_to_name (err));
    return (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
 }
@@ -256,8 +257,8 @@ vl53l0x_readMulti (vl53l0x_t * v, uint8_t reg, uint8_t * dst, uint8_t count)
    if (count > 1)
       i2c_master_read (i, dst + 0, count - 1, I2C_MASTER_ACK);
    i2c_master_read_byte (i, dst + count - 1, I2C_MASTER_LAST_NACK);
-   esp_err_t err = Done(v,i);
-   ESP_LOGI (TAG, "W %02X (%d) %s", reg, count, esp_err_to_name (err));
+   esp_err_t err = Done (v, i);
+   ESP_LOGI (TAG, "R %02X (%d) %s", reg, count, esp_err_to_name (err));
 }
 
 // Write an arbitrary number of bytes from the given array to the sensor,
@@ -267,9 +268,8 @@ vl53l0x_writeMulti (vl53l0x_t * v, uint8_t reg, uint8_t const *src, uint8_t coun
 {
    i2c_cmd_handle_t i = Write (v, reg);
    i2c_master_write (i, (uint8_t *) src, count, 1);
-   i2c_master_stop (i);
-   esp_err_t err = Done(v,i);
-   ESP_LOGI (TAG, "R %02X (%d) %s", reg, count, esp_err_to_name (err));
+   esp_err_t err = Done (v, i);
+   ESP_LOGI (TAG, "W %02X (%d) %s", reg, count, esp_err_to_name (err));
 }
 
 // Decode VCSEL (vertical cavity surface emitting laser) pulse period in PCLKs
@@ -303,7 +303,7 @@ timeoutMclksToMicroseconds (uint16_t timeout_period_mclks, uint8_t vcsel_period_
 }
 
 // based on VL53L0X_perform_single_ref_calibration()
-static int
+static const char *
 performSingleRefCalibration (vl53l0x_t * v, uint8_t vhv_init_byte)
 {
    vl53l0x_writeReg8Bit (v, SYSRANGE_START, 0x01 | vhv_init_byte);      // VL53L0X_REG_SYSRANGE_MODE_START_STOP
@@ -311,11 +311,11 @@ performSingleRefCalibration (vl53l0x_t * v, uint8_t vhv_init_byte)
    while ((vl53l0x_readReg8Bit (v, RESULT_INTERRUPT_STATUS) & 0x07) == 0)
    {
       if (checkTimeoutExpired ())
-         return 0;
+         return "CAL Timeout";
    }
    vl53l0x_writeReg8Bit (v, SYSTEM_INTERRUPT_CLEAR, 0x01);
    vl53l0x_writeReg8Bit (v, SYSRANGE_START, 0x00);
-   return 1;
+   return NULL;
 }
 
 // Encode sequence step timeout register value from timeout in MCLKs
@@ -423,20 +423,20 @@ timeoutMicrosecondsToMclks (uint32_t timeout_period_us, uint8_t vcsel_period_pcl
 // seems to increase the likelihood of getting an inaccurate reading because of
 // unwanted reflections from objects other than the intended target.
 // Defaults to 0.25 MCPS as initialized by the ST API and this library.
-int
+const char *
 vl53l0x_setSignalRateLimit (vl53l0x_t * v, float limit_Mcps)
 {
    if (limit_Mcps < 0 || limit_Mcps > 511.99)
-      return 0;
+      return "Bad rate";
    // Q9.7 fixed point format (9 integer bits, 7 fractional bits)
    vl53l0x_writeReg16Bit (v, FINAL_RANGE_CONFIG_MIN_COUNT_RATE_RTN_LIMIT, limit_Mcps * (1 << 7));
-   return 1;
+   return NULL;
 }
 
 // Get reference SPAD (single photon avalanche diode) count and type
 // based on VL53L0X_get_info_from_device(),
 // but only gets reference SPAD count and type
-int
+const char *
 vl53l0x_getSpadInfo (vl53l0x_t * v, uint8_t * count, int *type_is_aperture)
 {
    uint8_t tmp;
@@ -458,7 +458,7 @@ vl53l0x_getSpadInfo (vl53l0x_t * v, uint8_t * count, int *type_is_aperture)
    while (vl53l0x_readReg8Bit (v, 0x83) == 0x00)
    {
       if (checkTimeoutExpired ())
-         return 0;
+         return "SPAD Timeout";
    }
    vl53l0x_writeReg8Bit (v, 0x83, 0x01);
    tmp = vl53l0x_readReg8Bit (v, 0x92);
@@ -475,7 +475,7 @@ vl53l0x_getSpadInfo (vl53l0x_t * v, uint8_t * count, int *type_is_aperture)
    vl53l0x_writeReg8Bit (v, 0xFF, 0x00);
    vl53l0x_writeReg8Bit (v, 0x80, 0x00);
 
-   return 1;
+   return NULL;
 }
 
 // Get the measurement timing budget in microseconds
@@ -535,7 +535,7 @@ vl53l0x_getMeasurementTimingBudget (vl53l0x_t * v)
 // factor of N decreases the range measurement standard deviation by a factor of
 // sqrt(N). Defaults to about 33 milliseconds; the minimum is 20 ms.
 // based on VL53L0X_set_measurement_timing_budget_micro_seconds()
-int
+const char *
 vl53l0x_setMeasurementTimingBudget (vl53l0x_t * v, uint32_t budget_us)
 {
    SequenceStepEnables enables;
@@ -552,7 +552,7 @@ vl53l0x_setMeasurementTimingBudget (vl53l0x_t * v, uint32_t budget_us)
    uint32_t const MinTimingBudget = 20000;
 
    if (budget_us < MinTimingBudget)
-      return 0;
+      return "Low budget";
 
    uint32_t used_budget_us = StartOverhead + EndOverhead;
 
@@ -581,7 +581,7 @@ vl53l0x_setMeasurementTimingBudget (vl53l0x_t * v, uint32_t budget_us)
       // the final range."
 
       if (used_budget_us > budget_us)
-         return 0;              // "Requested timeout too big."
+         return "High budget";  // "Requested timeout too big."
 
       uint32_t final_range_timeout_us = budget_us - used_budget_us;
 
@@ -605,12 +605,14 @@ vl53l0x_setMeasurementTimingBudget (vl53l0x_t * v, uint32_t budget_us)
 
       measurement_timing_budget_us = budget_us; // store for internal reuse
    }
-   return 1;
+   return NULL;
 }
 
 vl53l0x_t *
-vl53l0x_config (uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t io_2v8)
+vl53l0x_config (int8_t port, int8_t scl, int8_t sda, int8_t xshut, uint8_t address, uint8_t io_2v8)
 {
+   if (port < 0 || scl < 0 || sda < 0 || scl == sda)
+      return NULL;
    if (i2c_driver_install (port, I2C_MODE_MASTER, 0, 0, 0))
       return NULL;              // Uh?
    i2c_config_t config = {
@@ -626,7 +628,7 @@ vl53l0x_config (uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t
       i2c_driver_delete (port);
       return NULL;
    }
-   i2c_set_timeout (port, 800000);      // 10ms ? Clock stretching
+   i2c_set_timeout (port, 80000);       // Clock stretching
    i2c_filter_enable (port, 5);
    // Can we see it
    i2c_cmd_handle_t i = i2c_cmd_link_create ();
@@ -651,6 +653,7 @@ vl53l0x_config (uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t
       return v;
    }
    memset (v, 0, sizeof (*v));
+   v->xshut = xshut;
    v->io_2v8 = io_2v8;
    v->port = port;
    v->address = address;
@@ -666,11 +669,11 @@ vl53l0x_config (uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t
 // enough unless a cover glass is added.
 // If io_2v8 (optional) is true or not given, the sensor is configured for 2V8
 // mode.
-int
+const char *
 vl53l0x_init (vl53l0x_t * v)
 {
+   const char *err;
    // Set up the VL53L0X
-   if(vl53l0x_readReg8Bit(v,0xC0)!=0xEE)return 0; // Reference register failed
    // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
    if (v->io_2v8)
       vl53l0x_writeReg8Bit (v, VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV, vl53l0x_readReg8Bit (v, VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01);   // set bit 0
@@ -689,7 +692,8 @@ vl53l0x_init (vl53l0x_t * v)
    vl53l0x_writeReg8Bit (v, MSRC_CONFIG_CONTROL, vl53l0x_readReg8Bit (v, MSRC_CONFIG_CONTROL) | 0x12);
 
    // set final range signal rate limit to 0.25 MCPS (million counts per second)
-   vl53l0x_setSignalRateLimit (v, 0.25);
+   if ((err = vl53l0x_setSignalRateLimit (v, 0.25)))
+      return err;
 
    vl53l0x_writeReg8Bit (v, SYSTEM_SEQUENCE_CONFIG, 0xFF);
 
@@ -699,8 +703,8 @@ vl53l0x_init (vl53l0x_t * v)
 
    uint8_t spad_count;
    int spad_type_is_aperture;
-   if (!vl53l0x_getSpadInfo (v, &spad_count, &spad_type_is_aperture))
-      return 0;
+   if ((err = vl53l0x_getSpadInfo (v, &spad_count, &spad_type_is_aperture)))
+      return err;
    // The SPAD map (RefGoodSpadMap) is read by VL53L0X_get_info_from_device() in
    // the API, but the same data seems to be more easily readable from
    // GLOBAL_CONFIG_SPAD_ENABLES_REF_0 through _6, so read it from there
@@ -855,7 +859,8 @@ vl53l0x_init (vl53l0x_t * v)
    // -- VL53L0X_SetSequenceStepEnable() end
 
    // "Recalculate timing budget"
-   vl53l0x_setMeasurementTimingBudget (v, measurement_timing_budget_us);
+   if ((err = vl53l0x_setMeasurementTimingBudget (v, measurement_timing_budget_us)))
+      return err;
 
    // VL53L0X_StaticInit() end
 
@@ -864,15 +869,15 @@ vl53l0x_init (vl53l0x_t * v)
    // -- VL53L0X_perform_vhv_calibration() begin
 
    vl53l0x_writeReg8Bit (v, SYSTEM_SEQUENCE_CONFIG, 0x01);
-   if (!performSingleRefCalibration (v, 0x40))
-      return 0;
+   if ((err = performSingleRefCalibration (v, 0x40)))
+      return err;
    // -- VL53L0X_perform_vhv_calibration() end
 
    // -- VL53L0X_perform_phase_calibration() begin
 
    vl53l0x_writeReg8Bit (v, SYSTEM_SEQUENCE_CONFIG, 0x02);
-   if (!performSingleRefCalibration (v, 0x00))
-      return 0;
+   if ((err = performSingleRefCalibration (v, 0x00)))
+      return err;
    // -- VL53L0X_perform_phase_calibration() end
 
    // "restore the previous Sequence Config"
@@ -880,9 +885,9 @@ vl53l0x_init (vl53l0x_t * v)
 
    // VL53L0X_PerformRefCalibration() end
    if (vl53l0x_i2cFail (v))
-      return 0;
+      return "I2C fail";
 
-   return 1;
+   return NULL;
 }
 
 void
@@ -948,7 +953,7 @@ vl53l0x_getSignalRateLimit (vl53l0x_t * v)
 //  pre:  12 to 18 (initialized default: 14)
 //  final: 8 to 14 (initialized default: 10)
 // based on VL53L0X_set_vcsel_pulse_period()
-int
+const char *
 vl53l0x_setVcselPulsePeriod (vl53l0x_t * v, vl53l0x_vcselPeriodType type, uint8_t period_pclks)
 {
    uint8_t vcsel_period_reg = encodeVcselPeriod (period_pclks);
@@ -995,7 +1000,7 @@ vl53l0x_setVcselPulsePeriod (vl53l0x_t * v, vl53l0x_vcselPeriodType type, uint8_
 
       default:
          // invalid period
-         return 0;
+         return "Invalid period";
       }
       vl53l0x_writeReg8Bit (v, PRE_RANGE_CONFIG_VALID_PHASE_LOW, 0x08);
 
@@ -1067,7 +1072,7 @@ vl53l0x_setVcselPulsePeriod (vl53l0x_t * v, vl53l0x_vcselPeriodType type, uint8_
 
       default:
          // invalid period
-         return 0;
+         return "Invalid period";
       }
 
       // apply new VCSEL period
@@ -1092,11 +1097,12 @@ vl53l0x_setVcselPulsePeriod (vl53l0x_t * v, vl53l0x_vcselPeriodType type, uint8_
 
       // set_sequence_step_timeout end
    } else
-      return 0;                 // Invalid type
+      return "Invalid type";
 
    // "Finally, the timing budget must be re-applied"
-
-   vl53l0x_setMeasurementTimingBudget (v, measurement_timing_budget_us);
+   const char *err;
+   if ((err = vl53l0x_setMeasurementTimingBudget (v, measurement_timing_budget_us)))
+      return err;
 
    // "Perform the phase calibration. This is needed after changing on vcsel period."
    // VL53L0X_perform_phase_calibration() begin
@@ -1108,7 +1114,7 @@ vl53l0x_setVcselPulsePeriod (vl53l0x_t * v, vl53l0x_vcselPeriodType type, uint8_
 
    // VL53L0X_perform_phase_calibration() end
 
-   return 1;
+   return NULL;
 }
 
 // Start continuous ranging measurements. If period_ms (optional) is 0 or not

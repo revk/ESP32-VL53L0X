@@ -16,10 +16,12 @@ typedef struct vl53l0x_s vl53l0x_t;
 typedef enum
 { VcselPeriodPreRange, VcselPeriodFinalRange } vl53l0x_vcselPeriodType;
 
+// Functions returning const char * are OK for NULL, else error string
+
 // Set up I2C and create the vl53l0x structure, NULL means could not see device on I2C
-vl53l0x_t *vl53l0x_config(uint8_t port, uint8_t scl, uint8_t sda, uint8_t address, uint8_t io_2v8);
+vl53l0x_t *vl53l0x_config (int8_t port, int8_t scl, int8_t sda, int8_t xshut, uint8_t address, uint8_t io_2v8);
 // Initialise the VL53L0X
-int vl53l0x_init (vl53l0x_t*);
+const char *vl53l0x_init (vl53l0x_t *);
 // End I2C and free the structure
 void vl53l0x_end (vl53l0x_t *);
 
@@ -36,13 +38,13 @@ uint32_t vl53l0x_readReg32Bit (vl53l0x_t *, uint8_t reg);
 void vl53l0x_writeMulti (vl53l0x_t *, uint8_t reg, uint8_t const *src, uint8_t count);
 void vl53l0x_readMulti (vl53l0x_t *, uint8_t reg, uint8_t * dst, uint8_t count);
 
-int vl53l0x_setSignalRateLimit (vl53l0x_t *, float limit_Mcps);
+const char *vl53l0x_setSignalRateLimit (vl53l0x_t *, float limit_Mcps);
 float vl53l0x_getSignalRateLimit (vl53l0x_t *);
 
-int vl53l0x_setMeasurementTimingBudget (vl53l0x_t *, uint32_t budget_us);
+const char *vl53l0x_setMeasurementTimingBudget (vl53l0x_t *, uint32_t budget_us);
 uint32_t vl53l0x_getMeasurementTimingBudget (vl53l0x_t *);
 
-int vl53l0x_setVcselPulsePeriod (vl53l0x_t *, vl53l0x_vcselPeriodType type, uint8_t period_pclks);
+const char *vl53l0x_setVcselPulsePeriod (vl53l0x_t *, vl53l0x_vcselPeriodType type, uint8_t period_pclks);
 uint8_t vl53l0x_getVcselPulsePeriod (vl53l0x_t *, vl53l0x_vcselPeriodType type);
 
 void vl53l0x_startContinuous (vl53l0x_t *, uint32_t period_ms);
