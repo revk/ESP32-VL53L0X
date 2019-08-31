@@ -9,8 +9,8 @@ static const char TAG[] = "ranger";
 
 #define TIMEOUT	(10/portTICK_PERIOD_MS) // I2C command timeout
 
-//#define tBUF	1300            // tBUF=1.3ms from data sheet (but seems unnecessary)
-//#define VL53L0X_LOG	ESP_LOGI	// Set to allow I2C logginc
+//#define tBUF  1300            // tBUF=1.3ms from data sheet (but seems unnecessary)
+//#define VL53L0X_LOG   ESP_LOGI        // Set to allow I2C logginc
 
 #ifndef VL53L0X_LOG
 #define VL53L0X_LOG(tag,...) err=err;
@@ -622,7 +622,8 @@ vl53l0x_config (int8_t port, int8_t scl, int8_t sda, int8_t xshut, uint8_t addre
 {
    if (port < 0 || scl < 0 || sda < 0 || scl == sda)
       return NULL;
-   if(!GPIO_IS_VALID_OUTPUT_GPIO(scl)||!GPIO_IS_VALID_OUTPUT_GPIO(sda)||(xshut>=0&&!GPIO_IS_VALID_OUTPUT_GPIO(xshut)))return 0;
+   if (!GPIO_IS_VALID_OUTPUT_GPIO (scl) || !GPIO_IS_VALID_OUTPUT_GPIO (sda) || (xshut >= 0 && !GPIO_IS_VALID_OUTPUT_GPIO (xshut)))
+      return 0;
    if (i2c_driver_install (port, I2C_MODE_MASTER, 0, 0, 0))
       return NULL;              // Uh?
    i2c_config_t config = {
@@ -643,7 +644,7 @@ vl53l0x_config (int8_t port, int8_t scl, int8_t sda, int8_t xshut, uint8_t addre
    if (xshut >= 0)
    {
       gpio_reset_pin (xshut);
-      gpio_set_level (xshut, 0);       // Off
+      gpio_set_level (xshut, 0);        // Off
       gpio_set_drive_capability (xshut, GPIO_DRIVE_CAP_3);
       gpio_set_direction (xshut, GPIO_MODE_OUTPUT);
    }
@@ -677,9 +678,9 @@ vl53l0x_init (vl53l0x_t * v)
    // Set up the VL53L0X
    if (v->xshut >= 0)
    {                            // XSHUT or power control
-      gpio_set_level (v->xshut, 0);       // Off
+      gpio_set_level (v->xshut, 0);     // Off
       usleep (100000);
-      gpio_set_level (v->xshut, 0);       // On
+      gpio_set_level (v->xshut, 0);     // On
       usleep (10000);           // Plenty of time to boot (data sheet says 1.2ms)
    }
    // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
