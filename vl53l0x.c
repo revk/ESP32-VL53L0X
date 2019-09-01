@@ -137,7 +137,7 @@ SequenceStepTimeouts;
 static uint8_t stop_variable;
 static uint16_t timeout_start_ms;
 static uint32_t measurement_timing_budget_us;
-#define millis() (esp_timer_get_time()/1000)
+#define millis() (esp_timer_get_time()/1000LL)
 
 // Record the current time to check an upcoming timeout against
 #define startTimeout() (timeout_start_ms = millis())
