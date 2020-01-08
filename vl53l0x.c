@@ -1,7 +1,7 @@
 // VL53L0X control
 // Copyright © 2019 Adrian Kennard, Andrews & Arnold Ltd. See LICENCE file for details. GPL 3.0
 // Based on https://github.com/pololu/vl53l0x-arduino
-static const char TAG[] = "ranger";
+static const char __attribute__((unused)) TAG[] = "ranger";
 
 #include "vl53l0x.h"
 #include "esp_log.h"
