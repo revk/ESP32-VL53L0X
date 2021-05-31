@@ -9,8 +9,9 @@ static const char __attribute__((unused)) TAG[] = "ranger";
 
 #define TIMEOUT	(10/portTICK_PERIOD_MS) // I2C command timeout
 
-//#define tBUF  1300            // tBUF=1.3ms from data sheet (but seems unnecessary)
-//#define VL53L0X_LOG   ESP_LOGI        // Set to allow I2C logginc
+#ifdef	CONFIG_VL53L0X_DEBUG
+#define VL53L0X_LOG   ESP_LOGI        // Set to allow I2C logging
+#endif
 
 #ifndef VL53L0X_LOG
 #define VL53L0X_LOG(tag,...) err=err;
