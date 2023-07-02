@@ -4,6 +4,7 @@
 static const char __attribute__((unused)) TAG[] = "ranger";
 
 #include "vl53l0x.h"
+#include "esp_timer.h"
 #include "esp_log.h"
 #include <driver/i2c.h>
 
